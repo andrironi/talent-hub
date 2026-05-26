@@ -1,0 +1,8 @@
+{
+  "name": "Remix 2 TalentHub Portal",
+  "description": "Professional talent landing page featuring secure login, registration, and a functional user management dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

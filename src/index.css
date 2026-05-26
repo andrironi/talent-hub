@@ -1,0 +1,177 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Outfit", sans-serif;
+  --font-serif: "Cormorant Garamond", serif;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+  }
+  
+  .serif {
+    font-family: var(--font-serif);
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+}
+
+@media print {
+  /* Hide non-printable elements */
+  .no-print,
+  aside,
+  header,
+  footer,
+  button,
+  .btn,
+  #order-step-indicators,
+  #form-step-3 > div:first-child, /* success banner */
+  .border-b.border-zinc-200, /* subheader / back area */
+  .flex.justify-end.pt-4 /* sum block/action buttons */ {
+    display: none !important;
+  }
+
+  /* Reset layout structure for plain page print */
+  body, #root, main, .min-h-screen, .bg-zinc-50 {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+  }
+
+  /* Target exact invoice box to fit neat page width */
+  #invoice-bill-card {
+    border: 1px solid #d4d4d8 !important;
+    border-radius: 16px !important;
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Ensure text colors inside invoice render properly in print mode */
+  #invoice-bill-card p,
+  #invoice-bill-card span,
+  #invoice-bill-card h4,
+  #invoice-bill-card td,
+  #invoice-bill-card th {
+    color: black !important;
+  }
+
+  /* Keep the header background black or dark if needed, but for print high contrast is preferred */
+  #invoice-bill-card .bg-zinc-950 {
+    background-color: #0c0a09 !important;
+    color: white !important;
+  }
+  #invoice-bill-card .bg-zinc-950 p,
+  #invoice-bill-card .bg-zinc-950 h4,
+  #invoice-bill-card .bg-zinc-950 span {
+    color: white !important;
+  }
+}
+
+/* Hide scrollbar utility for sleek scrollable list container displays */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;  /* IE & Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+/* Make entire page body and html support scrolling but without visible native scrollbars */
+html, body {
+  -ms-overflow-style: none !important; /* IE & Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+html::-webkit-scrollbar, body::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari & Opera */
+}
+
+
