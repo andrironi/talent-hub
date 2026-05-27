@@ -58,7 +58,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './components/ui/table';
 import { toast } from 'sonner';
-import { useReactToPrint } from 'react-to-print';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 // Custom interface for Candidate
 interface Candidate {
@@ -84,6 +85,67 @@ interface Order {
   salary: string;
   type: string;
   paymentStatus: 'Unpaid' | 'Paid';
+}
+
+function cleanCSS(cssText: string): string {
+  let result = '';
+  let i = 0;
+  while (i < cssText.length) {
+    if (cssText.startsWith('oklch(', i)) {
+      let depth = 1;
+      let start = i + 6;
+      let j = start;
+      while (j < cssText.length && depth > 0) {
+        if (cssText[j] === '(') depth++;
+        else if (cssText[j] === ')') depth--;
+        j++;
+      }
+      const valStr = cssText.slice(start, j - 1);
+      const parts = valStr.trim().split(/[\s,]+/);
+      let l = parseFloat(parts[0]);
+      if (parts[0] && parts[0].endsWith('%')) {
+        l = l / 100;
+      }
+      if (isNaN(l)) l = 0.5;
+      const rgbVal = Math.round(l * 255);
+      result += `rgb(${rgbVal}, ${rgbVal}, ${rgbVal})`;
+      i = j;
+    } else if (cssText.startsWith('oklab(', i)) {
+      let depth = 1;
+      let start = i + 6;
+      let j = start;
+      while (j < cssText.length && depth > 0) {
+        if (cssText[j] === '(') depth++;
+        else if (cssText[j] === ')') depth--;
+        j++;
+      }
+      const valStr = cssText.slice(start, j - 1);
+      const parts = valStr.trim().split(/[\s,]+/);
+      let l = parseFloat(parts[0]);
+      if (parts[0] && parts[0].endsWith('%')) {
+        l = l / 100;
+      }
+      if (isNaN(l)) l = 0.5;
+      const rgbVal = Math.round(l * 255);
+      result += `rgb(${rgbVal}, ${rgbVal}, ${rgbVal})`;
+      i = j;
+    } else if (cssText.startsWith('color-mix(', i)) {
+      let depth = 1;
+      let start = i + 10;
+      let j = start;
+      while (j < cssText.length && depth > 0) {
+        if (cssText[j] === '(') depth++;
+        else if (cssText[j] === ')') depth--;
+        j++;
+      }
+      result += 'rgb(120, 120, 120)';
+      i = j;
+    } else {
+      result += cssText[i];
+      i++;
+    }
+  }
+  return result;
 }
 
 export default function Dashboard() {
@@ -271,10 +333,78 @@ export default function Dashboard() {
     }, 1500);
   };
 
-  const handlePrintInvoice = useReactToPrint({
-    contentRef: invoiceRef,
-    documentTitle: completedOrderForInvoice ? `Invoice-${completedOrderForInvoice.id}` : 'Invoice',
-  });
+  const handlePrintInvoice = () => {
+    const element = document.getElementById('invoice-bill-card');
+    if (!element) {
+      toast.error('Gagal menemukan invoice card!');
+      return;
+    }
+
+    const toastId = toast.loading('Sedang menyiapkan file PDF...');
+
+    html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      onclone: (clonedDoc) => {
+        // Find and clean all stylesheet code of unsupported oklch/oklab color values
+        const styles = clonedDoc.querySelectorAll('style');
+        styles.forEach((s) => {
+          if (s.textContent) {
+            s.textContent = cleanCSS(s.textContent);
+          }
+        });
+
+        const elementInClone = clonedDoc.getElementById('invoice-bill-card');
+        if (elementInClone) {
+          const allElements = elementInClone.getElementsByTagName('*');
+          for (let i = 0; i < allElements.length; i++) {
+            const el = allElements[i] as HTMLElement;
+            if (el.getAttribute) {
+              const inlineStyle = el.getAttribute('style');
+              if (inlineStyle) {
+                el.setAttribute('style', cleanCSS(inlineStyle));
+              }
+            }
+          }
+        }
+      }
+    }).then((canvas) => {
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const imgWidth = 210;
+      const pageHeight = 295;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const orderId = completedOrderForInvoice?.id || 'invoice';
+      pdf.save(`Invoice-${orderId}.pdf`);
+      toast.dismiss(toastId);
+      toast.success('Invoice berhasil diunduh sebagai PDF!');
+    }).catch((err) => {
+      console.error('PDF Generation Error:', err);
+      toast.dismiss(toastId);
+      toast.error('Gagal membuat PDF. Membuka generator print browser...');
+      window.print();
+    });
+  };
 
   // Discover candidate pool
   const initialTalentPool: Candidate[] = [
@@ -546,39 +676,41 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col lg:flex-row relative">
+    <div className="min-h-screen bg-zinc-50 flex flex-col relative">
       
-      {/* MOBILE HEADER BANNER */}
-      <div className="lg:hidden flex items-center justify-between bg-white border-b border-zinc-200 z-30 px-6 py-4 sticky top-0 w-full shadow-sm">
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setIsMobileSidebarOpen(true)} 
-            className="text-zinc-650 hover:bg-zinc-100 rounded-xl"
-            id="mobile-sidebar-toggle"
-          >
-            <Menu className="w-6 h-6" />
-          </Button>
-          <div className="flex items-center gap-2 select-none">
-            <div className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center">
-              <Rocket className="text-white w-5 h-5" />
+      {/* MOBILE/DESKTOP HEADER BANNER */}
+      <div className="bg-white border-b border-zinc-200 z-30 sticky top-0 w-full shadow-sm">
+        <div className="max-w-7xl mx-auto w-full flex items-center justify-between px-6 md:px-10 py-4">
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setIsMobileSidebarOpen(true)} 
+              className="text-zinc-650 hover:bg-zinc-100 rounded-xl"
+              id="mobile-sidebar-toggle"
+            >
+              <Menu className="w-6 h-6" />
+            </Button>
+            <div className="flex items-center gap-2 select-none">
+              <div className="w-8 h-8 bg-zinc-900 rounded-lg flex items-center justify-center">
+                <Rocket className="text-white w-5 h-5" />
+              </div>
+              <span className="font-bold tracking-tight text-zinc-950 text-base">TalentHub</span>
             </div>
-            <span className="font-bold tracking-tight text-zinc-950 text-base">TalentHub</span>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Badge variant="outline" className="text-[10px] font-bold py-0.5 px-2 bg-zinc-100/50 border-zinc-200 capitalize">
-            {activeTab}
-          </Badge>
-          <Avatar className="w-8 h-8 rounded-full border-2 border-zinc-100 cursor-pointer" onClick={() => setActiveTab('Profile Settings')}>
-            <AvatarImage src={user.avatar} referrerPolicy="no-referrer" />
-            <AvatarFallback className="font-bold text-xs">U</AvatarFallback>
-          </Avatar>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="text-[10px] font-bold py-0.5 px-3 bg-zinc-100/50 border-zinc-200 capitalize">
+              {activeTab}
+            </Badge>
+            <Avatar className="w-8 h-8 rounded-full border-2 border-zinc-100 cursor-pointer" onClick={() => setActiveTab('Profile Settings')}>
+              <AvatarImage src={user.avatar} referrerPolicy="no-referrer" />
+              <AvatarFallback className="font-bold text-xs">U</AvatarFallback>
+            </Avatar>
+          </div>
         </div>
       </div>
 
-      {/* MOBILE DRAWER (SHEET OVERLAY) */}
+      {/* UNIVERSAL DRAWER (SHEET OVERLAY) */}
       <AnimatePresence>
         {isMobileSidebarOpen && (
           <>
@@ -588,7 +720,7 @@ export default function Dashboard() {
               animate={{ opacity: 0.4 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileSidebarOpen(false)}
-              className="fixed inset-0 bg-black z-40 lg:hidden"
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40"
             />
             {/* Nav Menu Content */}
             <motion.div
@@ -596,7 +728,7 @@ export default function Dashboard() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="fixed left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white border-r border-zinc-200 z-50 p-6 flex flex-col justify-between shadow-2xl lg:hidden"
+              className="fixed left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white border-r border-zinc-200 z-50 p-6 flex flex-col justify-between shadow-2xl"
             >
               <div className="space-y-6 flex-1 overflow-y-auto min-h-0 no-scrollbar pr-1">
                 {/* Drawer Branding */}
@@ -674,174 +806,9 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* 1. DESKTOP SLIM DARK ICON RAIL (AS SHOWN IN THE IMAGE) */}
-      <aside className="hidden lg:flex flex-col w-20 bg-zinc-950 h-screen fixed left-0 top-0 z-30 justify-between items-center py-6 border-r border-zinc-900 select-none">
-        <div className="flex flex-col items-center w-full gap-8">
-          {/* Dynamic Red/Orange Brand launcher at the top */}
-          <div 
-            onClick={() => setActiveTab('Overview')}
-            className="w-12 h-12 bg-[#FF6F3C] rounded-2xl flex items-center justify-center shadow-lg shadow-[#FF6F3C]/30 transition-all duration-300 hover:scale-105 cursor-pointer relative group"
-          >
-            <Rocket className="text-amber-300 w-5 h-5" />
-            <div className="absolute left-16 px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 text-white text-[10px] font-extrabold rounded-md shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 translate-x-2 group-hover:translate-x-0 whitespace-nowrap z-50">
-              TalentHub Recruit
-            </div>
-          </div>
-
-          {/* Navigation Icons Dock */}
-          <nav className="flex flex-col gap-3 w-full px-3">
-            {sidebarItems.map((item, idx) => {
-              const isActive = activeTab === item.name;
-              return (
-                <button
-                  key={idx}
-                  onClick={() => setActiveTab(item.name)}
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 relative group cursor-pointer ${
-                    isActive 
-                      ? 'bg-[#E15A2B] text-white shadow-lg shadow-[#E15A2B]/20' 
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900/50'
-                  }`}
-                  id={`nav-desktop-${item.name.replace(/\s+/g, '-').toLowerCase()}`}
-                >
-                  <item.icon className="w-5 h-5 shrink-0" />
-                  
-                  {/* Floating Notification Badge Over Icon */}
-                  {item.count && (
-                    <span className="absolute -top-1 -right-1 bg-amber-500 text-zinc-950 text-[9px] font-black px-1.5 min-w-4 h-4 flex items-center justify-center rounded-full border border-zinc-950 shadow-sm">
-                      {item.count}
-                    </span>
-                  )}
-                  
-                  {/* Tooltip on hovering icon */}
-                  <div className="absolute left-16 px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 text-white text-[11px] font-bold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 translate-x-3 group-hover:translate-x-0 whitespace-nowrap z-50">
-                    {item.name}
-                  </div>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* User profile avatar & quick action at the bottom of the rail */}
-        <div className="flex flex-col items-center gap-5 w-full">
-          <div 
-            onClick={() => setActiveTab('Profile Settings')}
-            className="relative cursor-pointer group"
-          >
-            <Avatar className="w-10 h-10 rounded-2xl ring-2 ring-emerald-500 ring-offset-2 ring-offset-zinc-900 border border-zinc-800 shadow-lg">
-              <AvatarImage src={user.avatar} referrerPolicy="no-referrer" />
-              <AvatarFallback className="font-bold text-xs">TH</AvatarFallback>
-            </Avatar>
-            <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-zinc-950 rounded-full" />
-            <div className="absolute left-16 px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 text-white text-[11px] font-bold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 translate-x-3 group-hover:translate-x-0 whitespace-nowrap z-50">
-              {user.name} ({user.companyName || 'Acme'})
-            </div>
-          </div>
-
-          <button 
-            onClick={handleSignOutDirect}
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-zinc-900/50 transition-all cursor-pointer group relative"
-          >
-            <LogOut className="w-4 h-4" />
-            <div className="absolute left-16 px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 text-white text-[11px] font-bold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 translate-x-3 group-hover:translate-x-0 whitespace-nowrap z-50">
-              Sign Out
-            </div>
-          </button>
-        </div>
-      </aside>
-
-      {/* 2. OVERLAYING / SLIDING COMPARTMENT NEXT TO THE ICON RAIL */}
-      <motion.div
-        initial={false}
-        animate={{ width: isMenuExpanded ? 240 : 0, opacity: isMenuExpanded ? 1 : 0 }}
-        transition={{ type: 'spring', damping: 26, stiffness: 210 }}
-        className="hidden lg:flex flex-col bg-white border-r border-zinc-200 h-screen fixed left-20 top-0 z-20 overflow-hidden select-none"
-      >
-        <div className="w-[240px] flex flex-col justify-between h-full p-6">
-          <div className="space-y-6 flex-1 overflow-y-auto min-h-0 no-scrollbar pr-1">
-            {/* Header / Brand Title section */}
-            <div>
-              <span className="font-extrabold tracking-tight text-base text-zinc-900 block truncate">TalentHub</span>
-              <span className="text-[9px] font-bold text-zinc-400 block uppercase tracking-wider mt-0.5">Recruiter Console</span>
-            </div>
-
-            {/* Quick Organization Status Container */}
-            <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-150 flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-zinc-900 text-white flex items-center justify-center font-bold text-xs rounded-lg uppercase shrink-0">
-                {(user.companyName || 'C').substring(0,2)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-zinc-900 truncate leading-none">{user.companyName || 'Acme Corp'}</p>
-                <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1 mt-1">
-                  <span className="w-1 h-1 bg-emerald-500 rounded-full inline-block animate-pulse"></span> Online
-                </p>
-              </div>
-            </div>
-
-            {/* Expanded items labels list */}
-            <nav className="space-y-1">
-              {sidebarItems.map((item, idx) => {
-                const isActive = activeTab === item.name;
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveTab(item.name)}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                      isActive 
-                        ? 'bg-zinc-100 text-zinc-950 font-extrabold' 
-                        : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 font-medium'
-                    }`}
-                    id={`nav-desktop-label-${item.name.replace(/\s+/g, '-').toLowerCase()}`}
-                  >
-                    <span className="text-xs tracking-tight">{item.name}</span>
-                    {item.count && (
-                      <Badge className={`rounded-md px-1.5 py-0 text-[9px] font-bold border-none ${
-                        isActive ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-650'
-                      }`}>
-                        {item.count}
-                      </Badge>
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="pt-4 border-t border-zinc-100">
-            <p className="text-[10px] text-zinc-400 font-bold text-center uppercase tracking-wider">Console Portal © 2026</p>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* CORE CONTENT CANVAS (OFFSET ON DESKTOP DYNAMICALLY FOR THE EXPANDED SIDEBAR) */}
-      <main className={`flex-1 w-full min-h-screen flex flex-col transition-all duration-300 ${isMenuExpanded ? 'lg:pl-[320px]' : 'lg:pl-20'}`}>
+      {/* CORE CONTENT CANVAS (FULL WIDTH WITH RESPONSIVE MENUS) */}
+      <main className="flex-1 w-full min-h-screen flex flex-col bg-zinc-50 transition-all duration-300">
         
-        {/* DESKTOP INTEGRATED HEADER NAVBAR (FEATURING THE PILL TOGGLE BUTTON ENHANCEMENT) */}
-        <header className="hidden lg:flex items-center justify-between px-10 py-5 bg-white/80 backdrop-blur-md border-b border-zinc-200 sticky top-0 z-10 w-full select-none">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsMenuExpanded(!isMenuExpanded)}
-              className="flex items-center gap-2 border border-zinc-300 bg-zinc-950 text-white hover:bg-zinc-900 active:scale-95 rounded-full px-5 py-2 text-xs font-black transition-all duration-200 shadow-md shadow-zinc-950/10 cursor-pointer"
-            >
-              <PanelLeft className={`w-4 h-4 transition-transform duration-200 ${isMenuExpanded ? 'rotate-180' : ''}`} />
-              <span>Menu</span>
-            </button>
-            <span className="text-zinc-300 text-sm font-semibold mx-3">|</span>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-zinc-400 uppercase tracking-widest">
-              <span>TalentHub</span>
-              <ChevronRight className="w-3 h-3 text-zinc-300" />
-              <span className="text-zinc-900 font-extrabold">{activeTab}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 text-xs font-extrabold text-zinc-400 capitalize">
-              <span className="inline-block w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-              <span className="text-zinc-700">{user?.companyName || 'Acme'} Recruiter Mode</span>
-            </div>
-          </div>
-        </header>
-
         <div className="p-6 md:p-10 max-w-7xl mx-auto w-full flex-1">
           
           <AnimatePresence mode="wait">
